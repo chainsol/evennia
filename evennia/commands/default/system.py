@@ -132,22 +132,25 @@ def _py_code(caller, buf):
     Execute the buffer.
     """
     measure_time = caller.db._py_measure_time
+    escape_html = caller.db._py_escape_html or True
     string = "Executing code%s ..." % (
         " (measure timing)" if measure_time else "")
     caller.msg(string)
     _run_code_snippet(caller, buf, mode="exec",
                       measure_time=measure_time,
+                      escape_html=escape_html,
                       show_input=False)
     return True
 
 
 def _py_quit(caller):
     del caller.db._py_measure_time
+    del caller.db._py_escape_html
     caller.msg("Exited the code editor.")
 
 
 def _run_code_snippet(caller, pycode, mode="eval", measure_time=False,
-                      show_input=True):
+                      show_input=True, escape_html=True):
     """
     Run code and try to display information to the caller.
 
@@ -177,9 +180,9 @@ def _run_code_snippet(caller, pycode, mode="eval", measure_time=False,
     if show_input:
         try:
             caller.msg(">>> %s" % pycode, session=session,
-                       options={"raw": True})
+                       options={"raw": True, "escape_html": escape_html})
         except TypeError:
-            caller.msg(">>> %s" % pycode, options={"raw": True})
+            caller.msg(">>> %s" % pycode, options={"raw": True, "escape_html": escape_html})
 
     try:
         try:
@@ -207,9 +210,9 @@ def _run_code_snippet(caller, pycode, mode="eval", measure_time=False,
         ret = "\n".join("%s" % line for line in errlist if line)
 
     try:
-        caller.msg(ret, session=session, options={"raw": True})
+        caller.msg(ret, session=session, options={"raw": True, "escape_html": escape_html})
     except TypeError:
-        caller.msg(ret, options={"raw": True})
+        caller.msg(ret, options={"raw": True, "escape_html": escape_html})
 
 
 class CmdPy(COMMAND_DEFAULT_CLASS):
@@ -219,10 +222,12 @@ class CmdPy(COMMAND_DEFAULT_CLASS):
     Usage:
       @py <cmd>
       @py/edit
+      @py/raw
 
     Switches:
       time - output an approximate execution time for <cmd>
       edit - open a code editor for multi-line code experimentation
+      raw - Don't escape HTML entities in output
 
     Separate multiple commands by ';' or open the editor using the
     /edit switch.  A few variables are made available for convenience
@@ -252,9 +257,14 @@ class CmdPy(COMMAND_DEFAULT_CLASS):
 
         caller = self.caller
         pycode = self.args
+        if "raw" in self.switches:
+            escape_html = False
+        else:
+            escape_html = True
 
         if "edit" in self.switches:
             caller.db._py_measure_time = "time" in self.switches
+            caller.db._py_escape_html = "raw" in self.switches
             EvEditor(self.caller, loadfunc=_py_load, savefunc=_py_code,
                      quitfunc=_py_quit, key="Python exec: :w  or :!", persistent=True,
                      codefunc=_py_code)
@@ -265,7 +275,7 @@ class CmdPy(COMMAND_DEFAULT_CLASS):
             self.msg(string)
             return
 
-        _run_code_snippet(caller, self.args, measure_time="time" in self.switches)
+        _run_code_snippet(caller, self.args, measure_time="time" in self.switches, escape_html="raw" not in self.switches)
 
 # helper function. Kept outside so it can be imported and run
 # by other commands.
